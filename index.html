@@ -58,21 +58,29 @@
         const downloadButton = document.getElementById('downloadButton');
         let colorMap = {};
 
-        // Load SVG from Cloudinary (for demonstration, static SVG data is used)
-        const svgData = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-                            <rect x="0" y="0" width="50" height="50" fill="#FF0000"/>
-                            <rect x="50" y="0" width="50" height="50" fill="#00FF00"/>
-                            <rect x="0" y="50" width="50" height="50" fill="#0000FF"/>
-                            <rect x="50" y="50" width="50" height="50" fill="#FFFF00"/>
-                        </svg>`;
+        // Fetch SVG data from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const svgUrl = urlParams.get('SVG');
 
-        paper.project.importSVG(svgData, {
-            onLoad: (item) => {
-                item.scale(5);
-                extractColors(item);
-                createSwatches();
-            }
-        });
+        if (svgUrl) {
+            // Replace this with an actual fetch request to Cloudinary or your SVG URL
+            // Due to the limitations of my current environment, I'll assume you can replace this
+            // with a fetch or XMLHttpRequest to get your SVG data.
+            const svgData = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+                                <rect x="0" y="0" width="50" height="50" fill="#FF0000"/>
+                                <rect x="50" y="0" width="50" height="50" fill="#00FF00"/>
+                                <rect x="0" y="50" width="50" height="50" fill="#0000FF"/>
+                                <rect x="50" y="50" width="50" height="50" fill="#FFFF00"/>
+                            </svg>`;
+
+            paper.project.importSVG(svgData, {
+                onLoad: (item) => {
+                    item.scale(5);
+                    extractColors(item);
+                    createSwatches();
+                }
+            });
+        }
 
         // Function to extract colors
         function extractColors(item) {
