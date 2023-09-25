@@ -46,18 +46,36 @@
   let colorMap = {};
 
   // Recursive function to flatten SVG and populate colorMap
-  function flattenSVG(item) {
-    if (item.children) {
-      item.children.forEach(flattenSVG);
+// Flatten SVG by subtracting overlapping paths
+function flattenSVG(item) {
+  if (item.children) {
+    item.children.forEach(flattenSVG);
+  }
+  if (item.fillColor) {
+    let color = item.fillColor.toCSS(true);
+    if (!colorMap[color]) {
+      colorMap[color] = [];
     }
-    if (item.fillColor) {
-      let color = item.fillColor.toCSS(true);
-      if (!colorMap[color]) {
-        colorMap[color] = [];
+    colorMap[color].push(item);
+  }
+
+  // Perform the actual "flattening" by subtracting paths
+  for (let color in colorMap) {
+    const paths = colorMap[color];
+    for (let i = 0; i < paths.length; i++) {
+      for (let j = i + 1; j < paths.length; j++) {
+        const topPath = paths[i];
+        const bottomPath = paths[j];
+        if (topPath.intersects(bottomPath)) {
+          const compoundPath = bottomPath.subtract(topPath);
+          bottomPath.remove();
+          colorMap[color][j] = compoundPath;
+        }
       }
-      colorMap[color].push(item);
     }
   }
+}
+
 
   // Load SVG
   const urlParams = new URLSearchParams(window.location.search);
