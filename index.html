@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SVG Color Modifier</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <style>
+    /* Add Google Material Design styling here */
+    .swatch {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      margin: 10px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>SVG Color Modifier</h1>
+
+  <div id="svg-container"></div>
+  <div id="swatches"></div>
+  <button id="downloadBtn">Download SVG</button>
+
+  <script>
+    // Sample SVG URL for demonstration (replace with the one from Cloudinary)
+    const sampleSvgUrl = 'data:image/svg+xml;utf8,<svg>...</svg>'; // Replace ... with actual SVG data
+    let svgDom;
+    let colorSet = new Set();
+
+    // Fetch and Parse SVG
+    const fetchAndParseSvg = async (url) => {
+      const response = await fetch(url);
+      const text = await response.text();
+      const parser = new DOMParser();
+      svgDom = parser.parseFromString(text, 'image/svg+xml').documentElement;
+      document.getElementById('svg-container').appendChild(svgDom);
+    };
+
+    // Find unique colors and create swatches
+    const findUniqueColorsAndCreateSwatches = () => {
+      const paths = svgDom.querySelectorAll('path');
+      paths.forEach((path) => {
+        const color = path.getAttribute('fill');
+        if (color && color !== 'none') {
+          colorSet.add(color);
+        }
+      });
+
+      const swatchesDiv = document.getElementById('swatches');
+      colorSet.forEach((color) => {
+        const swatch = document.createElement('div');
+        swatch.className = 'swatch';
+        swatch.style.backgroundColor = color;
+        swatch.addEventListener('click', () => {
+          deleteColor(color);
+        });
+        swatchesDiv.appendChild(swatch);
+      });
+    };
+
+    // Delete color from SVG
+    const deleteColor = (color) => {
+      const paths = svgDom.querySelectorAll(`path[fill="${color}"]`);
+      paths.forEach((path) => {
+        path.remove();
+      });
+      colorSet.delete(color);
+    };
+
+    // Download modified SVG
+    const downloadSvg = () => {
+      const serializer = new XMLSerializer();
+      const modifiedSvg = serializer.serializeToString(svgDom);
+      const blob = new Blob([modifiedSvg], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'modified-svg.svg';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    };
+
+    // Initialize
+    (async () => {
+      await fetchAndParseSvg(sampleSvgUrl);
+      findUniqueColorsAndCreateSwatches();
+      document.getElementById('downloadBtn').addEventListener('click', downloadSvg);
+    })();
+  </script>
+</body>
+</html>
