@@ -2,141 +2,108 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SVG Color Manipulator</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-    <link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap">
-    <script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.15/paper-full.min.js"></script>
+    <title>SVG Editor</title>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.15/paper-full.min.js"></script>
     <style>
-        body {
+        #canvas {
             background-color: grey;
-            font-family: 'Roboto', sans-serif;
         }
         .swatch {
-            width: 30px;
-            height: 30px;
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
             margin: 5px;
-            position: relative;
-        }
-        .cross {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            text-align: center;
-            line-height: 30px;
-            font-size: 24px;
-            display: none;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
-    <h1>SVG Color Manipulator</h1>
-    <div id="canvasContainer"></div>
-    <div id="swatchContainer"></div>
-    <button id="downloadButton" class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect">
-        Download SVG
-    </button>
-
+    <h1>SVG Color Editor</h1>
+    <canvas id="canvas" resize></canvas>
+    <div id="swatches"></div>
+    <button onclick="downloadSVG()">Download SVG</button>
     <script>
-        // Initialize paper.js
-        const canvasContainer = document.getElementById('canvasContainer');
-        const canvas = document.createElement('canvas');
-        canvas.id = 'paperCanvas';
-        canvas.width = 500;
-        canvas.height = 500;
-        canvasContainer.appendChild(canvas);
-
-        paper.setup('paperCanvas');
-
-        // Global variables
-        const swatchContainer = document.getElementById('swatchContainer');
-        const downloadButton = document.getElementById('downloadButton');
+        paper.setup('canvas');
         let colorMap = {};
 
-        // Fetch SVG data from URL parameter
-        const urlParams = new URLSearchParams(window.location.search);
-        const svgUrl = urlParams.get('SVG');
-
-        if (svgUrl) {
-            // Replace this with an actual fetch request to Cloudinary or your SVG URL
-            // Due to the limitations of my current environment, I'll assume you can replace this
-            // with a fetch or XMLHttpRequest to get your SVG data.
-            const svgData = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-                                <rect x="0" y="0" width="50" height="50" fill="#FF0000"/>
-                                <rect x="50" y="0" width="50" height="50" fill="#00FF00"/>
-                                <rect x="0" y="50" width="50" height="50" fill="#0000FF"/>
-                                <rect x="50" y="50" width="50" height="50" fill="#FFFF00"/>
-                            </svg>`;
-
-            paper.project.importSVG(svgData, {
-                onLoad: (item) => {
-                    item.scale(5);
-                    extractColors(item);
-                    createSwatches();
+        function traverseItem(item) {
+            if (item.children) {
+                item.children.forEach(child => traverseItem(child));
+            }
+            if (item.fillColor) {
+                const color = item.fillColor.toCSS(true);
+                if (!colorMap[color]) {
+                    colorMap[color] = [];
                 }
-            });
+                colorMap[color].push(item);
+            }
         }
 
-        // Function to extract colors
-        function extractColors(item) {
-            item.children.forEach(child => {
-                const color = child.fillColor ? child.fillColor.toCSS(true) : null;
-                if (color) {
-                    colorMap[color] = {
-                        item: child,
-                        deleted: false
-                    };
+        function flattenSVG() {
+            for (let color in colorMap) {
+                let paths = colorMap[color];
+                for (let i = 0; i < paths.length; i++) {
+                    for (let j = i + 1; j < paths.length; j++) {
+                        if (paths[i].intersects(paths[j])) {
+                            let compoundPath = paths[j].subtract(paths[i], {insert: false});
+                            paths[j].remove();
+                            paths[j] = compoundPath;
+                            compoundPath.fillColor = color;
+                            compoundPath.addTo(paper.project.activeLayer);
+                        }
+                    }
                 }
-            });
+            }
         }
 
-        // Function to create color swatches
-        function createSwatches() {
-            for (const color in colorMap) {
+        function populateSwatches() {
+            const swatches = document.getElementById('swatches');
+            for (let color in colorMap) {
                 const swatch = document.createElement('div');
                 swatch.className = 'swatch';
-                swatch.style.background = color;
-                swatch.addEventListener('click', () => toggleColor(color));
-
-                const cross = document.createElement('div');
-                cross.className = 'cross';
-                cross.innerHTML = 'X';
-                swatch.appendChild(cross);
-
-                swatchContainer.appendChild(swatch);
+                swatch.style.backgroundColor = color;
+                swatch.addEventListener('click', function() {
+                    toggleColor(color, swatch);
+                });
+                swatches.appendChild(swatch);
             }
         }
 
-        // Function to toggle color
-        function toggleColor(color) {
-            if (colorMap[color].deleted) {
-                colorMap[color].item.visible = true;
-                colorMap[color].deleted = false;
+        function toggleColor(color, swatch) {
+            const paths = colorMap[color];
+            if (paths[0].visible) {
+                paths.forEach(path => path.visible = false);
             } else {
-                colorMap[color].item.visible = false;
-                colorMap[color].deleted = true;
+                paths.forEach(path => path.visible = true);
             }
-            const swatch = document.querySelector(`[style="background: ${color};"]`);
-            const cross = swatch.querySelector('.cross');
-            cross.style.display = colorMap[color].deleted ? 'block' : 'none';
         }
 
-        // Function to download SVG
-        downloadButton.addEventListener('click', () => {
+        function downloadSVG() {
             const svg = paper.project.exportSVG({ asString: true });
             const blob = new Blob([svg], { type: 'image/svg+xml' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'modified.svg';
+            a.download = 'edited.svg';
             a.click();
             URL.revokeObjectURL(url);
-        });
+        }
+
+        // Dummy SVG URL for testing
+        const svgUrl = 'https://example.com/your.svg';
+        fetch(svgUrl)
+            .then(response => response.text())
+            .then(svgString => {
+                paper.project.importSVG(svgString, {
+                    expandShapes: true,
+                    onLoad: function(item) {
+                        paper.view.viewSize = item.bounds.size;
+                        traverseItem(item);
+                        flattenSVG();
+                        populateSwatches();
+                    }
+                });
+            });
     </script>
 </body>
 </html>
