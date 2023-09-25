@@ -45,6 +45,20 @@
   // Initialize color map
   let colorMap = {};
 
+  // Recursive function to flatten SVG and populate colorMap
+  function flattenSVG(item) {
+    if (item.children) {
+      item.children.forEach(flattenSVG);
+    }
+    if (item.fillColor) {
+      let color = item.fillColor.toCSS(true);
+      if (!colorMap[color]) {
+        colorMap[color] = [];
+      }
+      colorMap[color].push(item);
+    }
+  }
+
   // Load SVG
   const urlParams = new URLSearchParams(window.location.search);
   const svgUrl = urlParams.get('svg');
@@ -57,23 +71,11 @@
           onLoad: (item) => {
             paper.view.viewSize = item.bounds.size;
             flattenSVG(item);
+            console.log('Color Map:', colorMap); // Debugging
             populateSwatches();
           }
         });
       });
-  }
-
-  // Flatten SVG
-  function flattenSVG(item) {
-    item.children.forEach(child => {
-      if (child.fillColor) {
-        let color = child.fillColor.toCSS(true);
-        if (!colorMap[color]) {
-          colorMap[color] = [];
-        }
-        colorMap[color].push(child);
-      }
-    });
   }
 
   // Populate swatches
