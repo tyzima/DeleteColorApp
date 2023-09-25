@@ -2,91 +2,80 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SVG Color Modifier</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <title>SVG Editor</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.15/paper-full.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <div id="swatches"></div>
+    <button id="downloadSvg">Download SVG</button>
+
+    <script>
+        // Initialize Paper.js
+        paper.setup('myCanvas');
+
+        // Read SVG from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const svgUrl = urlParams.get('svg');
+        
+        if (svgUrl) {
+            // Fetch and load SVG
+            fetch(svgUrl)
+            .then(response => response.text())
+            .then(data => {
+                const svg = data;
+                paper.project.importSVG(svg, {
+                    onLoad: function(item) {
+                        // Flatten the SVG
+                        item.rasterize(72, false);
+
+                        // Extract colors and create swatches
+                        const colors = new Set();  // To store unique colors
+                        item.traverse(function(path) {
+                            if (path.fillColor) {
+                                colors.add(path.fillColor.toCSS());
+                            }
+                        });
+
+                        colors.forEach(color => {
+                            const swatch = $('<div class="swatch"></div>');
+                            swatch.css('background-color', color);
+                            swatch.click(function() {
+                                // Delete color on swatch click
+                                item.traverse(function(path) {
+                                    if (path.fillColor && path.fillColor.toCSS() === color) {
+                                        path.remove();
+                                    }
+                                });
+                            });
+                            $('#swatches').append(swatch);
+                        });
+                    }
+                });
+            });
+        }
+
+        $('#downloadSvg').click(function() {
+            const svgData = paper.project.exportSVG({ asString: true });
+            const blob = new Blob([svgData], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'modified.svg';
+            link.click();
+            URL.revokeObjectURL(url);
+        });
+    </script>
+
     <style>
+        /* Add your Google Web Fonts and Google Material Design styles here */
         .swatch {
             width: 50px;
             height: 50px;
             border-radius: 50%;
-            margin: 10px;
+            margin: 5px;
             cursor: pointer;
         }
     </style>
-</head>
-<body>
-
-<h1>SVG Color Modifier</h1>
-<div id="svg-container"></div>
-<div id="swatches"></div>
-<button id="downloadBtn">Download SVG</button>
-
-<script>
-    let svgDom;
-    let colorSet = new Set();
-
-    // Get SVG URL from query parameter
-    const urlParams = new URLSearchParams(window.location.search);
-    const svgUrl = urlParams.get('svgURL');
-
-    const fetchAndParseSvg = async (url) => {
-        const response = await fetch(url);
-        const text = await response.text();
-        const parser = new DOMParser();
-        svgDom = parser.parseFromString(text, 'image/svg+xml').documentElement;
-        document.getElementById('svg-container').appendChild(svgDom);
-        findUniqueColorsAndCreateSwatches();
-    };
-
-    const findUniqueColorsAndCreateSwatches = () => {
-        const paths = svgDom.querySelectorAll('path');
-        paths.forEach((path) => {
-            const color = path.getAttribute('fill');
-            if (color && color !== 'none') {
-                colorSet.add(color);
-            }
-        });
-
-        const swatchesDiv = document.getElementById('swatches');
-        colorSet.forEach((color) => {
-            const swatch = document.createElement('div');
-            swatch.className = 'swatch';
-            swatch.style.backgroundColor = color;
-            swatch.addEventListener('click', () => {
-                deleteColor(color);
-            });
-            swatchesDiv.appendChild(swatch);
-        });
-    };
-
-    const deleteColor = (color) => {
-        const paths = svgDom.querySelectorAll(`path[fill="${color}"]`);
-        paths.forEach((path) => {
-            path.remove();
-        });
-        colorSet.delete(color);
-    };
-
-    const downloadSvg = () => {
-        const serializer = new XMLSerializer();
-        const modifiedSvg = serializer.serializeToString(svgDom);
-        const blob = new Blob([modifiedSvg], { type: 'image/svg+xml' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'modified-svg.svg';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    };
-
-    // Initialize
-    (async () => {
-        await fetchAndParseSvg(svgUrl);
-        document.getElementById('downloadBtn').addEventListener('click', downloadSvg);
-    })();
-</script>
 </body>
 </html>
