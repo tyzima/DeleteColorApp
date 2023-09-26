@@ -1,92 +1,122 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SVG Flattener</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.2/paper-full.min.js"></script>
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-</head>
-<body>
-  <div id="swatches"></div>
-  <canvas id="canvas" resize></canvas>
-  <button id="download">Download SVG</button>
-
-  <script>
-    // Get the SVG URL parameter from the query string
-    const urlParams = new URLSearchParams(window.location.search);
-    const svgUrl = urlParams.get('svg');
-
-    // Load the SVG into the canvas using Paper.js
-    paper.setup('canvas');
-    paper.project.importSVG(svgUrl, function(item) {
-      // Flatten the SVG to remove overlapping paths
-      item.flatten(10);
-
-      // Extract the colors used in the logo and display them as swatches
-      const colors = new Set();
-      item.children.forEach(function(child) {
-        if (child.fillColor) {
-          colors.add(child.fillColor.toCSS(true));
-        }
-      });
-      colors.forEach(function(color) {
-        const swatch = $('<div>').addClass('swatch').css('background-color', color);
-        $('#swatches').append(swatch);
-        swatch.click(function() {
-          if (swatch.hasClass('deleted')) {
-            swatch.removeClass('deleted');
-            item.children.forEach(function(child) {
-              if (child.fillColor && child.fillColor.toCSS(true) === color) {
-                child.visible = true;
-              }
-            });
-          } else {
-            swatch.addClass('deleted');
-            item.children.forEach(function(child) {
-              if (child.fillColor && child.fillColor.toCSS(true) === color) {
-                child.visible = false;
-              }
-            });
-          }
-        });
-      });
-
-      // Download the modified SVG when the button is clicked
-      $('#download').click(function() {
-        const svgData = item.exportSVG({ asString: true });
-        const downloadLink = document.createElement('a');
-        downloadLink.href = 'data:image/svg+xml;base64,' + btoa(svgData);
-        downloadLink.download = 'modified.svg';
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
-      });
-    });
-  </script>
-
+  <title>SVG Color Remover</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/material-components-web/4.0.0/material-components-web.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.15/paper-full.min.js"></script>
   <style>
     body {
-      background-color: #eee;
+      font-family: 'Roboto', sans-serif;
+      background-color: #f0f0f0;
     }
-    #swatches {
-      margin-bottom: 20px;
+    #canvas {
+      background-color: grey;
     }
     .swatch {
-      display: inline-block;
       width: 30px;
       height: 30px;
       border-radius: 50%;
-      margin-right: 10px;
-      cursor: pointer;
+      margin: 5px;
+      position: relative;
     }
-    .deleted:after {
-      content: 'X';
-      display: block;
-      text-align: center;
+    .swatch > span {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
       font-size: 20px;
-      font-weight: bold;
-      color: white;
     }
   </style>
+</head>
+<body>
+
+<h1>SVG Color Remover</h1>
+
+<div id="swatches"></div>
+
+<canvas id="canvas"></canvas>
+
+<button id="downloadBtn">Download SVG</button>
+
+<script>
+  const queryString = window.location.search;
+  const urlParams = new URLSearchParams(queryString);
+  const svgUrl = urlParams.get('svg');
+  const canvas = document.getElementById('canvas');
+  const swatchesDiv = document.getElementById('swatches');
+  const downloadBtn = document.getElementById('downloadBtn');
+  
+  paper.setup(canvas);
+  
+  let svgColors = new Set();
+  let removedColors = new Set();
+  
+  function loadSVG() {
+    if (!svgUrl) return;
+    fetch(svgUrl)
+      .then(response => response.text())
+      .then(data => {
+        paper.project.importSVG(data, {
+          onLoad: (item) => {
+            item.fitBounds(paper.view.bounds);
+            extractColors(item);
+            renderSwatches();
+          }
+        });
+      });
+  }
+
+  function extractColors(item) {
+    item.children.forEach(child => {
+      if (child.fillColor) svgColors.add(child.fillColor.toCSS());
+    });
+  }
+  
+  function renderSwatches() {
+    Array.from(svgColors).forEach(color => {
+      const swatch = document.createElement('div');
+      swatch.className = 'swatch';
+      swatch.style.backgroundColor = color;
+      swatch.addEventListener('click', () => toggleColor(swatch, color));
+      swatchesDiv.appendChild(swatch);
+    });
+  }
+  
+  function toggleColor(swatch, color) {
+    if (removedColors.has(color)) {
+      removedColors.delete(color);
+      swatch.innerHTML = '';
+      updateSVG();
+    } else {
+      removedColors.add(color);
+      swatch.innerHTML = '<span>&times;</span>';
+      updateSVG();
+    }
+  }
+  
+  function updateSVG() {
+    paper.project.activeLayer.children.forEach(child => {
+      if (removedColors.has(child.fillColor.toCSS())) {
+        child.fillColor = null;
+      }
+    });
+  }
+  
+  downloadBtn.addEventListener('click', () => {
+    const svg = paper.project.exportSVG({ asString: true });
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'modified.svg';
+    a.click();
+  });
+  
+  loadSVG();
+</script>
+
 </body>
 </html>
