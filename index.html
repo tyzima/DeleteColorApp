@@ -1,119 +1,92 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8">
-  <title>SVG Editor</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.15/paper-full.min.js"></script>
-  <style>
-    #canvas {
-      background-color: grey;
-    }
-    .swatch {
-      width: 50px;
-      height: 50px;
-      border-radius: 50%;
-      margin: 5px;
-      cursor: pointer;
-    }
-  </style>
+  <title>SVG Flattener</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.2/paper-full.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
+  <div id="swatches"></div>
+  <canvas id="canvas" resize></canvas>
+  <button id="download">Download SVG</button>
 
-<h1>SVG Color Editor</h1>
-<canvas id="canvas" resize></canvas>
-<div id="swatches"></div>
-<button onclick="downloadSVG()">Download SVG</button>
+  <script>
+    // Get the SVG URL parameter from the query string
+    const urlParams = new URLSearchParams(window.location.search);
+    const svgUrl = urlParams.get('svg');
 
-<script>
-  paper.setup('canvas');
-  let colorMap = {};
+    // Load the SVG into the canvas using Paper.js
+    paper.setup('canvas');
+    paper.project.importSVG(svgUrl, function(item) {
+      // Flatten the SVG to remove overlapping paths
+      item.flatten(10);
 
-  // Load SVG
-  const urlParams = new URLSearchParams(window.location.search);
-  const svgUrl = urlParams.get('svg');
-  if (svgUrl) {
-    fetch(svgUrl)
-      .then(response => response.text())
-      .then(data => {
-        paper.project.importSVG(data, {
-          expandShapes: true,
-          onLoad: (item) => {
-            traverseItem(item);
-            populateSwatches();
+      // Extract the colors used in the logo and display them as swatches
+      const colors = new Set();
+      item.children.forEach(function(child) {
+        if (child.fillColor) {
+          colors.add(child.fillColor.toCSS(true));
+        }
+      });
+      colors.forEach(function(color) {
+        const swatch = $('<div>').addClass('swatch').css('background-color', color);
+        $('#swatches').append(swatch);
+        swatch.click(function() {
+          if (swatch.hasClass('deleted')) {
+            swatch.removeClass('deleted');
+            item.children.forEach(function(child) {
+              if (child.fillColor && child.fillColor.toCSS(true) === color) {
+                child.visible = true;
+              }
+            });
+          } else {
+            swatch.addClass('deleted');
+            item.children.forEach(function(child) {
+              if (child.fillColor && child.fillColor.toCSS(true) === color) {
+                child.visible = false;
+              }
+            });
           }
         });
       });
-  }
 
-  function traverseItem(item) {
-    if (item.children) {
-      item.children.forEach(child => traverseItem(child));
-    }
-    if (item.fillColor) {
-      const color = item.fillColor.toCSS(true);
-      if (!colorMap[color]) {
-        colorMap[color] = [];
-      }
-      colorMap[color].push(item);
-    }
-  }
-
-  function excludeColor(color) {
-    const exclusionLayer = new paper.Layer();
-    const paths = colorMap[color];
-    paths.forEach(path => {
-      const newPath = path.clone();
-      newPath.addTo(exclusionLayer);
-    });
-
-    paper.project.layers[0].activate(); // Activate the original layer
-
-    exclusionLayer.children.forEach(exclusionPath => {
-      paper.project.activeLayer.children.forEach(originalPath => {
-        if (exclusionPath.intersects(originalPath)) {
-          const newOriginalPath = originalPath.exclude(exclusionPath);
-          originalPath.remove();
-          newOriginalPath.addTo(paper.project.activeLayer);
-        }
+      // Download the modified SVG when the button is clicked
+      $('#download').click(function() {
+        const svgData = item.exportSVG({ asString: true });
+        const downloadLink = document.createElement('a');
+        downloadLink.href = 'data:image/svg+xml;base64,' + btoa(svgData);
+        downloadLink.download = 'modified.svg';
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
       });
     });
+  </script>
 
-    exclusionLayer.remove();
-  }
-
-  function populateSwatches() {
-    const swatches = document.getElementById('swatches');
-    for (let color in colorMap) {
-      const swatch = document.createElement('div');
-      swatch.className = 'swatch';
-      swatch.style.backgroundColor = color;
-      swatch.addEventListener('click', function() {
-        toggleColor(color, swatch);
-      });
-      swatches.appendChild(swatch);
+  <style>
+    body {
+      background-color: #eee;
     }
-  }
-
-  function toggleColor(color, swatch) {
-    if (colorMap[color][0].visible) {
-      colorMap[color].forEach(path => path.visible = false);
-    } else {
-      colorMap[color].forEach(path => path.visible = true);
-      excludeColor(color);
+    #swatches {
+      margin-bottom: 20px;
     }
-  }
-
-  function downloadSVG() {
-    const svg = paper.project.exportSVG({ asString: true });
-    const blob = new Blob([svg], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'edited.svg';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-</script>
-
+    .swatch {
+      display: inline-block;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      margin-right: 10px;
+      cursor: pointer;
+    }
+    .deleted:after {
+      content: 'X';
+      display: block;
+      text-align: center;
+      font-size: 20px;
+      font-weight: bold;
+      color: white;
+    }
+  </style>
 </body>
 </html>
