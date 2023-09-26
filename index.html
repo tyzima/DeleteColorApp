@@ -1,109 +1,119 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>SVG Editor</title>
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.15/paper-full.min.js"></script>
-    <style>
-        #canvas {
-            background-color: grey;
-        }
-        .swatch {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            margin: 5px;
-            cursor: pointer;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>SVG Editor</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.15/paper-full.min.js"></script>
+  <style>
+    #canvas {
+      background-color: grey;
+    }
+    .swatch {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      margin: 5px;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
-    <h1>SVG Color Editor</h1>
-    <canvas id="canvas" resize></canvas>
-    <div id="swatches"></div>
-    <button onclick="downloadSVG()">Download SVG</button>
-    <script>
-        paper.setup('canvas');
-        let colorMap = {};
 
-        function traverseItem(item) {
-            if (item.children) {
-                item.children.forEach(child => traverseItem(child));
-            }
-            if (item.fillColor) {
-                const color = item.fillColor.toCSS(true);
-                if (!colorMap[color]) {
-                    colorMap[color] = [];
-                }
-                colorMap[color].push(item);
-            }
+<h1>SVG Color Editor</h1>
+<canvas id="canvas" resize></canvas>
+<div id="swatches"></div>
+<button onclick="downloadSVG()">Download SVG</button>
+
+<script>
+  paper.setup('canvas');
+  let colorMap = {};
+
+  // Load SVG
+  const urlParams = new URLSearchParams(window.location.search);
+  const svgUrl = urlParams.get('svg');
+  if (svgUrl) {
+    fetch(svgUrl)
+      .then(response => response.text())
+      .then(data => {
+        paper.project.importSVG(data, {
+          expandShapes: true,
+          onLoad: (item) => {
+            traverseItem(item);
+            populateSwatches();
+          }
+        });
+      });
+  }
+
+  function traverseItem(item) {
+    if (item.children) {
+      item.children.forEach(child => traverseItem(child));
+    }
+    if (item.fillColor) {
+      const color = item.fillColor.toCSS(true);
+      if (!colorMap[color]) {
+        colorMap[color] = [];
+      }
+      colorMap[color].push(item);
+    }
+  }
+
+  function excludeColor(color) {
+    const exclusionLayer = new paper.Layer();
+    const paths = colorMap[color];
+    paths.forEach(path => {
+      const newPath = path.clone();
+      newPath.addTo(exclusionLayer);
+    });
+
+    paper.project.layers[0].activate(); // Activate the original layer
+
+    exclusionLayer.children.forEach(exclusionPath => {
+      paper.project.activeLayer.children.forEach(originalPath => {
+        if (exclusionPath.intersects(originalPath)) {
+          const newOriginalPath = originalPath.exclude(exclusionPath);
+          originalPath.remove();
+          newOriginalPath.addTo(paper.project.activeLayer);
         }
+      });
+    });
 
-        function flattenSVG() {
-            for (let color in colorMap) {
-                let paths = colorMap[color];
-                for (let i = 0; i < paths.length; i++) {
-                    for (let j = i + 1; j < paths.length; j++) {
-                        if (paths[i].intersects(paths[j])) {
-                            let compoundPath = paths[j].subtract(paths[i], {insert: false});
-                            paths[j].remove();
-                            paths[j] = compoundPath;
-                            compoundPath.fillColor = color;
-                            compoundPath.addTo(paper.project.activeLayer);
-                        }
-                    }
-                }
-            }
-        }
+    exclusionLayer.remove();
+  }
 
-        function populateSwatches() {
-            const swatches = document.getElementById('swatches');
-            for (let color in colorMap) {
-                const swatch = document.createElement('div');
-                swatch.className = 'swatch';
-                swatch.style.backgroundColor = color;
-                swatch.addEventListener('click', function() {
-                    toggleColor(color, swatch);
-                });
-                swatches.appendChild(swatch);
-            }
-        }
+  function populateSwatches() {
+    const swatches = document.getElementById('swatches');
+    for (let color in colorMap) {
+      const swatch = document.createElement('div');
+      swatch.className = 'swatch';
+      swatch.style.backgroundColor = color;
+      swatch.addEventListener('click', function() {
+        toggleColor(color, swatch);
+      });
+      swatches.appendChild(swatch);
+    }
+  }
 
-        function toggleColor(color, swatch) {
-            const paths = colorMap[color];
-            if (paths[0].visible) {
-                paths.forEach(path => path.visible = false);
-            } else {
-                paths.forEach(path => path.visible = true);
-            }
-        }
+  function toggleColor(color, swatch) {
+    if (colorMap[color][0].visible) {
+      colorMap[color].forEach(path => path.visible = false);
+    } else {
+      colorMap[color].forEach(path => path.visible = true);
+      excludeColor(color);
+    }
+  }
 
-        function downloadSVG() {
-            const svg = paper.project.exportSVG({ asString: true });
-            const blob = new Blob([svg], { type: 'image/svg+xml' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'edited.svg';
-            a.click();
-            URL.revokeObjectURL(url);
-        }
+  function downloadSVG() {
+    const svg = paper.project.exportSVG({ asString: true });
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'edited.svg';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+</script>
 
-        // Dummy SVG URL for testing
-        const svgUrl = 'https://example.com/your.svg';
-        fetch(svgUrl)
-            .then(response => response.text())
-            .then(svgString => {
-                paper.project.importSVG(svgString, {
-                    expandShapes: true,
-                    onLoad: function(item) {
-                        paper.view.viewSize = item.bounds.size;
-                        traverseItem(item);
-                        flattenSVG();
-                        populateSwatches();
-                    }
-                });
-            });
-    </script>
 </body>
 </html>
